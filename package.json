@@ -1,7 +1,7 @@
 {
-  "name": "moa-cli-core",
+  "name": "@promactinfo/moa-cli",
   "description": "Mother of All CLI for AI automation",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "author": "Chintan Shah",
   "bin": {
     "moa": "./bin/run.js"
