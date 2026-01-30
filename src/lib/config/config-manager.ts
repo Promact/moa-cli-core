@@ -4,8 +4,8 @@
  */
 
 import * as fs from 'node:fs';
-import * as path from 'node:path';
 import * as os from 'node:os';
+import * as path from 'node:path';
 
 export interface ProfileConfig {
     /** Default provider for this profile */
@@ -29,8 +29,8 @@ const DEFAULT_CONFIG: AppConfig = {
 };
 
 export class ConfigManager {
-    private configPath: string;
     private config: AppConfig;
+    private configPath: string;
 
     constructor(configDir?: string) {
         const dir = configDir || path.join(os.homedir(), '.moa');
@@ -39,40 +39,24 @@ export class ConfigManager {
     }
 
     /**
-     * Get config directory path
+     * Delete a profile
      */
-    getConfigDir(): string {
-        return path.dirname(this.configPath);
-    }
+    deleteProfile(profileName: string): boolean {
+        if (profileName === 'default') {
+            throw new Error('Cannot delete the default profile');
+        }
 
-    /**
-     * Load config from disk
-     */
-    private loadConfig(): AppConfig {
-        try {
-            if (fs.existsSync(this.configPath)) {
-                const data = fs.readFileSync(this.configPath, 'utf-8');
-                return { ...DEFAULT_CONFIG, ...JSON.parse(data) };
+        if (this.config.profiles[profileName]) {
+            delete this.config.profiles[profileName];
+            if (this.config.activeProfile === profileName) {
+                this.config.activeProfile = 'default';
             }
-        } catch (error) {
-            console.error('Error loading config:', error);
-        }
-        return { ...DEFAULT_CONFIG };
-    }
 
-    /**
-     * Save config to disk
-     */
-    private saveConfig(): void {
-        const dir = path.dirname(this.configPath);
-        if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true });
+            this.saveConfig();
+            return true;
         }
-        fs.writeFileSync(
-            this.configPath,
-            JSON.stringify(this.config, null, 2),
-            'utf-8'
-        );
+
+        return false;
     }
 
     /**
@@ -83,14 +67,10 @@ export class ConfigManager {
     }
 
     /**
-     * Set the active profile
+     * Get config directory path
      */
-    setActiveProfile(profileName: string): void {
-        if (!this.config.profiles[profileName]) {
-            this.config.profiles[profileName] = {};
-        }
-        this.config.activeProfile = profileName;
-        this.saveConfig();
+    getConfigDir(): string {
+        return path.dirname(this.configPath);
     }
 
     /**
@@ -102,17 +82,11 @@ export class ConfigManager {
     }
 
     /**
-     * Update profile configuration
+     * Get provider-specific config for a profile
      */
-    updateProfile(profileName: string, config: Partial<ProfileConfig>): void {
-        if (!this.config.profiles[profileName]) {
-            this.config.profiles[profileName] = {};
-        }
-        this.config.profiles[profileName] = {
-            ...this.config.profiles[profileName],
-            ...config,
-        };
-        this.saveConfig();
+    getProviderConfig(provider: string, profileName?: string): Record<string, any> {
+        const profile = this.getProfile(profileName);
+        return profile.providers?.[provider] || {};
     }
 
     /**
@@ -123,29 +97,15 @@ export class ConfigManager {
     }
 
     /**
-     * Delete a profile
+     * Set the active profile
      */
-    deleteProfile(profileName: string): boolean {
-        if (profileName === 'default') {
-            throw new Error('Cannot delete the default profile');
+    setActiveProfile(profileName: string): void {
+        if (!this.config.profiles[profileName]) {
+            this.config.profiles[profileName] = {};
         }
-        if (this.config.profiles[profileName]) {
-            delete this.config.profiles[profileName];
-            if (this.config.activeProfile === profileName) {
-                this.config.activeProfile = 'default';
-            }
-            this.saveConfig();
-            return true;
-        }
-        return false;
-    }
 
-    /**
-     * Get provider-specific config for a profile
-     */
-    getProviderConfig(provider: string, profileName?: string): Record<string, any> {
-        const profile = this.getProfile(profileName);
-        return profile.providers?.[provider] || {};
+        this.config.activeProfile = profileName;
+        this.saveConfig();
     }
 
     /**
@@ -160,11 +120,60 @@ export class ConfigManager {
         if (!this.config.profiles[name]) {
             this.config.profiles[name] = {};
         }
+
         if (!this.config.profiles[name].providers) {
             this.config.profiles[name].providers = {};
         }
+
         this.config.profiles[name].providers![provider] = config;
         this.saveConfig();
+    }
+
+    /**
+     * Update profile configuration
+     */
+    updateProfile(profileName: string, config: Partial<ProfileConfig>): void {
+        if (!this.config.profiles[profileName]) {
+            this.config.profiles[profileName] = {};
+        }
+
+        this.config.profiles[profileName] = {
+            ...this.config.profiles[profileName],
+            ...config,
+        };
+        this.saveConfig();
+    }
+
+    /**
+     * Load config from disk
+     */
+    private loadConfig(): AppConfig {
+        try {
+            if (fs.existsSync(this.configPath)) {
+                const data = fs.readFileSync(this.configPath, 'utf8');
+                return { ...DEFAULT_CONFIG, ...JSON.parse(data) };
+            }
+        } catch (error) {
+            console.error('Error loading config:', error);
+        }
+
+        return { ...DEFAULT_CONFIG };
+    }
+
+    /**
+     * Save config to disk
+     */
+    private saveConfig(): void {
+        const dir = path.dirname(this.configPath);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+
+        fs.writeFileSync(
+            this.configPath,
+            JSON.stringify(this.config, null, 2),
+            'utf-8'
+        );
     }
 }
 
@@ -175,5 +184,6 @@ export function getConfigManager(): ConfigManager {
     if (!instance) {
         instance = new ConfigManager();
     }
+
     return instance;
 }

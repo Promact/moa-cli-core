@@ -4,9 +4,10 @@
  * Usage: moa login <service> [--profile=<name>]
  */
 
-import { Args, Command, Flags } from '@oclif/core';
 import { confirm, password } from '@inquirer/prompts';
-import { getAuthManager, Credentials } from '../../lib/auth/auth-manager.js';
+import { Args, Command, Flags } from '@oclif/core';
+
+import { Credentials, getAuthManager } from '../../lib/auth/auth-manager.js';
 import { getConfigManager } from '../../lib/config/config-manager.js';
 
 const SUPPORTED_PROVIDERS = ['hubspot', 'semrush', 'meta'] as const;
@@ -20,27 +21,24 @@ export default class Login extends Command {
             required: true,
         }),
     };
-
-    static override description = 'Authenticate with a SaaS provider';
-
-    static override examples = [
+static override description = 'Authenticate with a SaaS provider';
+static override examples = [
         '<%= config.bin %> <%= command.id %> hubspot',
         '<%= config.bin %> <%= command.id %> hubspot --profile=client-a',
         '<%= config.bin %> <%= command.id %> semrush --profile=agency',
     ];
-
-    static override flags = {
+static override flags = {
         profile: Flags.string({
             char: 'p',
-            description: 'Profile name to store credentials under',
             default: 'default',
+            description: 'Profile name to store credentials under',
         }),
     };
 
     async run(): Promise<void> {
         const { args, flags } = await this.parse(Login);
         const service = args.service as SupportedProvider;
-        const profile = flags.profile;
+        const {profile} = flags;
 
         // Set active profile
         const configManager = getConfigManager();
@@ -55,8 +53,8 @@ export default class Login extends Command {
 
         if (existing) {
             const overwrite = await confirm({
-                message: 'Credentials already exist for this service/profile. Overwrite?',
                 default: false,
+                message: 'Credentials already exist for this service/profile. Overwrite?',
             });
             if (!overwrite) {
                 this.log('Login cancelled.');
@@ -79,14 +77,21 @@ export default class Login extends Command {
         service: SupportedProvider
     ): Promise<Credentials> {
         switch (service) {
-            case 'hubspot':
+            case 'hubspot': {
                 return this.promptHubSpotCredentials();
-            case 'semrush':
-                return this.promptSemrushCredentials();
-            case 'meta':
+            }
+
+            case 'meta': {
                 return this.promptMetaCredentials();
-            default:
+            }
+
+            case 'semrush': {
+                return this.promptSemrushCredentials();
+            }
+
+            default: {
                 throw new Error(`Unsupported provider: ${service}`);
+            }
         }
     }
 
@@ -95,8 +100,8 @@ export default class Login extends Command {
         this.log('Create one at: https://developers.hubspot.com/docs/api/private-apps\n');
 
         const token = await password({
-            message: 'Enter your HubSpot Private App token:',
             mask: '*',
+            message: 'Enter your HubSpot Private App token:',
         });
 
         return {
@@ -105,33 +110,33 @@ export default class Login extends Command {
         };
     }
 
-    private async promptSemrushCredentials(): Promise<Credentials> {
-        this.log('Semrush uses API keys for authentication.');
-        this.log('Find your API key at: https://www.semrush.com/accounts/profile/\n');
-
-        const token = await password({
-            message: 'Enter your Semrush API key:',
-            mask: '*',
-        });
-
-        return {
-            token,
-            tokenType: 'api_key',
-        };
-    }
-
     private async promptMetaCredentials(): Promise<Credentials> {
         this.log('Meta Ads uses OAuth2 access tokens.');
         this.log('Generate a token at: https://developers.facebook.com/tools/explorer/\n');
 
         const token = await password({
-            message: 'Enter your Meta access token:',
             mask: '*',
+            message: 'Enter your Meta access token:',
         });
 
         return {
             token,
             tokenType: 'oauth',
+        };
+    }
+
+    private async promptSemrushCredentials(): Promise<Credentials> {
+        this.log('Semrush uses API keys for authentication.');
+        this.log('Find your API key at: https://www.semrush.com/accounts/profile/\n');
+
+        const token = await password({
+            mask: '*',
+            message: 'Enter your Semrush API key:',
+        });
+
+        return {
+            token,
+            tokenType: 'api_key',
         };
     }
 }

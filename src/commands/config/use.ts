@@ -5,6 +5,7 @@
  */
 
 import { Args, Command } from '@oclif/core';
+
 import { getConfigManager } from '../../lib/config/config-manager.js';
 
 export default class ConfigUse extends Command {
@@ -14,10 +15,8 @@ export default class ConfigUse extends Command {
             required: true,
         }),
     };
-
-    static override description = 'Switch to a different profile';
-
-    static override examples = [
+static override description = 'Switch to a different profile';
+static override examples = [
         '<%= config.bin %> <%= command.id %> client-a',
         '<%= config.bin %> <%= command.id %> default',
     ];

@@ -5,18 +5,17 @@
  */
 
 import { Command, Flags } from '@oclif/core';
-import { getConfigManager } from '../../lib/config/config-manager.js';
+
 import { getAuthManager } from '../../lib/auth/auth-manager.js';
+import { getConfigManager } from '../../lib/config/config-manager.js';
 
 export default class Config extends Command {
     static override description = 'Display current configuration and profiles';
-
-    static override examples = [
+static override examples = [
         '<%= config.bin %> <%= command.id %>',
         '<%= config.bin %> <%= command.id %> --profile=client-a',
     ];
-
-    static override flags = {
+static override flags = {
         profile: Flags.string({
             char: 'p',
             description: 'Show configuration for specific profile',
@@ -51,6 +50,7 @@ export default class Config extends Command {
                 this.log(`    ${status} ${provider}`);
             }
         }
+
         this.log('');
     }
 }

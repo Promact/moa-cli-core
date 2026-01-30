@@ -4,8 +4,9 @@
  * Usage: moa logout <service> [--profile=<name>]
  */
 
-import { Args, Command, Flags } from '@oclif/core';
 import { confirm } from '@inquirer/prompts';
+import { Args, Command, Flags } from '@oclif/core';
+
 import { getAuthManager } from '../../lib/auth/auth-manager.js';
 
 const SUPPORTED_PROVIDERS = ['hubspot', 'semrush', 'meta'] as const;
@@ -19,31 +20,28 @@ export default class Logout extends Command {
             required: true,
         }),
     };
-
-    static override description = 'Remove stored credentials for a SaaS provider';
-
-    static override examples = [
+static override description = 'Remove stored credentials for a SaaS provider';
+static override examples = [
         '<%= config.bin %> <%= command.id %> hubspot',
         '<%= config.bin %> <%= command.id %> hubspot --profile=client-a',
     ];
-
-    static override flags = {
+static override flags = {
         force: Flags.boolean({
             char: 'f',
-            description: 'Skip confirmation prompt',
             default: false,
+            description: 'Skip confirmation prompt',
         }),
         profile: Flags.string({
             char: 'p',
-            description: 'Profile name to remove credentials from',
             default: 'default',
+            description: 'Profile name to remove credentials from',
         }),
     };
 
     async run(): Promise<void> {
         const { args, flags } = await this.parse(Logout);
         const service = args.service as SupportedProvider;
-        const profile = flags.profile;
+        const {profile} = flags;
 
         const authManager = getAuthManager();
         const hasCredentials = await authManager.hasCredentials(service, profile);
@@ -55,8 +53,8 @@ export default class Logout extends Command {
 
         if (!flags.force) {
             const shouldDelete = await confirm({
-                message: `Remove credentials for ${service} (profile: ${profile})?`,
                 default: false,
+                message: `Remove credentials for ${service} (profile: ${profile})?`,
             });
             if (!shouldDelete) {
                 this.log('Logout cancelled.');

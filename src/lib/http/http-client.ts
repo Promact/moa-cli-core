@@ -10,36 +10,37 @@ import axios, {
     AxiosResponse,
     InternalAxiosRequestConfig,
 } from 'axios';
+
 import { getRateLimiter } from './rate-limiter.js';
 
 export interface HttpClientConfig {
     /** Base URL for all requests */
     baseURL?: string;
-    /** Request timeout in ms */
-    timeout?: number;
+    /** Custom headers */
+    headers?: Record<string, string>;
     /** Maximum retry attempts */
     maxRetries?: number;
     /** Provider name for rate limiting */
     provider?: string;
-    /** Custom headers */
-    headers?: Record<string, string>;
+    /** Request timeout in ms */
+    timeout?: number;
 }
 
 interface RetryConfig extends InternalAxiosRequestConfig {
-    _retryCount?: number;
     _provider?: string;
+    _retryCount?: number;
 }
 
 const DEFAULT_CONFIG: HttpClientConfig = {
-    timeout: 30000,
     maxRetries: 3,
+    timeout: 30_000,
 };
 
 /**
  * Calculate exponential backoff delay
  */
 function getBackoffDelay(retryCount: number, baseDelay = 1000): number {
-    return Math.min(baseDelay * Math.pow(2, retryCount), 30000);
+    return Math.min(baseDelay * 2**retryCount, 30_000);
 }
 
 /**
@@ -67,11 +68,11 @@ function isRetryableError(error: AxiosError): boolean {
 /**
  * Get Retry-After header value in ms
  */
-function getRetryAfter(error: AxiosError): number | null {
+function getRetryAfter(error: AxiosError): null | number {
     const retryAfter = error.response?.headers?.['retry-after'];
     if (!retryAfter) return null;
 
-    const seconds = parseInt(retryAfter, 10);
+    const seconds = Number.parseInt(retryAfter, 10);
     if (!isNaN(seconds)) {
         return seconds * 1000;
     }
@@ -101,56 +102,31 @@ export class HttpClient {
 
         this.client = axios.create({
             baseURL: this.config.baseURL,
-            timeout: this.config.timeout,
             headers: this.config.headers,
+            timeout: this.config.timeout,
         });
 
         this.setupInterceptors();
     }
 
-    private setupInterceptors(): void {
-        // Request interceptor - add provider info
-        this.client.interceptors.request.use((config: RetryConfig) => {
-            config._provider = this.config.provider;
-            config._retryCount = config._retryCount || 0;
-            return config;
-        });
+    /**
+     * Clear authorization header
+     */
+    clearAuthHeader(): void {
+        delete this.client.defaults.headers.common.Authorization;
+    }
 
-        // Response interceptor - handle retries
-        this.client.interceptors.response.use(
-            (response: AxiosResponse) => response,
-            async (error: AxiosError) => {
-                const config = error.config as RetryConfig;
-
-                if (!config || !isRetryableError(error)) {
-                    return Promise.reject(error);
-                }
-
-                const retryCount = config._retryCount || 0;
-                const maxRetries = this.config.maxRetries || DEFAULT_CONFIG.maxRetries!;
-
-                if (retryCount >= maxRetries) {
-                    return Promise.reject(error);
-                }
-
-                // Calculate delay
-                let delay = getRetryAfter(error) || getBackoffDelay(retryCount);
-
-                // Log retry attempt
-                console.error(
-                    `Request failed (attempt ${retryCount + 1}/${maxRetries}). ` +
-                    `Retrying in ${delay}ms...`
-                );
-
-                // Wait before retry
-                await sleep(delay);
-
-                // Increment retry count
-                config._retryCount = retryCount + 1;
-
-                // Retry the request
-                return this.client.request(config);
-            }
+    /**
+     * Make a rate-limited DELETE request
+     */
+    async delete<T = any>(
+        url: string,
+        config?: AxiosRequestConfig
+    ): Promise<AxiosResponse<T>> {
+        const rateLimiter = getRateLimiter();
+        return rateLimiter.execute(
+            () => this.client.delete<T>(url, config),
+            this.config.provider
         );
     }
 
@@ -164,6 +140,21 @@ export class HttpClient {
         const rateLimiter = getRateLimiter();
         return rateLimiter.execute(
             () => this.client.get<T>(url, config),
+            this.config.provider
+        );
+    }
+
+    /**
+     * Make a rate-limited PATCH request
+     */
+    async patch<T = any>(
+        url: string,
+        data?: any,
+        config?: AxiosRequestConfig
+    ): Promise<AxiosResponse<T>> {
+        const rateLimiter = getRateLimiter();
+        return rateLimiter.execute(
+            () => this.client.patch<T>(url, data, config),
             this.config.provider
         );
     }
@@ -199,46 +190,56 @@ export class HttpClient {
     }
 
     /**
-     * Make a rate-limited PATCH request
-     */
-    async patch<T = any>(
-        url: string,
-        data?: any,
-        config?: AxiosRequestConfig
-    ): Promise<AxiosResponse<T>> {
-        const rateLimiter = getRateLimiter();
-        return rateLimiter.execute(
-            () => this.client.patch<T>(url, data, config),
-            this.config.provider
-        );
-    }
-
-    /**
-     * Make a rate-limited DELETE request
-     */
-    async delete<T = any>(
-        url: string,
-        config?: AxiosRequestConfig
-    ): Promise<AxiosResponse<T>> {
-        const rateLimiter = getRateLimiter();
-        return rateLimiter.execute(
-            () => this.client.delete<T>(url, config),
-            this.config.provider
-        );
-    }
-
-    /**
      * Set authorization header
      */
-    setAuthHeader(token: string, type: 'Bearer' | 'Basic' = 'Bearer'): void {
-        this.client.defaults.headers.common['Authorization'] = `${type} ${token}`;
+    setAuthHeader(token: string, type: 'Basic' | 'Bearer' = 'Bearer'): void {
+        this.client.defaults.headers.common.Authorization = `${type} ${token}`;
     }
 
-    /**
-     * Clear authorization header
-     */
-    clearAuthHeader(): void {
-        delete this.client.defaults.headers.common['Authorization'];
+    private setupInterceptors(): void {
+        // Request interceptor - add provider info
+        this.client.interceptors.request.use((config: RetryConfig) => {
+            config._provider = this.config.provider;
+            config._retryCount = config._retryCount || 0;
+            return config;
+        });
+
+        // Response interceptor - handle retries
+        this.client.interceptors.response.use(
+            (response: AxiosResponse) => response,
+            async (error: AxiosError) => {
+                const config = error.config as RetryConfig;
+
+                if (!config || !isRetryableError(error)) {
+                    throw error;
+                }
+
+                const retryCount = config._retryCount || 0;
+                const maxRetries = this.config.maxRetries || DEFAULT_CONFIG.maxRetries!;
+
+                if (retryCount >= maxRetries) {
+                    throw error;
+                }
+
+                // Calculate delay
+                const delay = getRetryAfter(error) || getBackoffDelay(retryCount);
+
+                // Log retry attempt
+                console.error(
+                    `Request failed (attempt ${retryCount + 1}/${maxRetries}). ` +
+                    `Retrying in ${delay}ms...`
+                );
+
+                // Wait before retry
+                await sleep(delay);
+
+                // Increment retry count
+                config._retryCount = retryCount + 1;
+
+                // Retry the request
+                return this.client.request(config);
+            }
+        );
     }
 }
 

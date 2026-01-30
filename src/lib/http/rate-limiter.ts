@@ -12,18 +12,18 @@ export interface RateLimiterConfig {
   minTime?: number;
   /** Reservoir size (max burst) */
   reservoir?: number;
-  /** Reservoir refresh interval in ms */
-  reservoirRefreshInterval?: number;
   /** Amount to refresh reservoir by */
   reservoirRefreshAmount?: number;
+  /** Reservoir refresh interval in ms */
+  reservoirRefreshInterval?: number;
 }
 
 const DEFAULT_CONFIG: RateLimiterConfig = {
   maxConcurrent: 5,
   minTime: 100, // 10 req/sec
   reservoir: 10,
-  reservoirRefreshInterval: 1000,
   reservoirRefreshAmount: 10,
+  reservoirRefreshInterval: 1000,
 };
 
 /**
@@ -34,31 +34,42 @@ export const PROVIDER_LIMITS: Record<string, RateLimiterConfig> = {
     maxConcurrent: 10,
     minTime: 100,
     reservoir: 100,
-    reservoirRefreshInterval: 10000, // 100 req/10s
     reservoirRefreshAmount: 100,
-  },
-  semrush: {
-    maxConcurrent: 5,
-    minTime: 200, // 5 req/sec
-    reservoir: 5,
-    reservoirRefreshInterval: 1000,
-    reservoirRefreshAmount: 5,
+    reservoirRefreshInterval: 10_000, // 100 req/10s
   },
   meta: {
     maxConcurrent: 5,
     minTime: 100,
     reservoir: 10,
-    reservoirRefreshInterval: 1000,
     reservoirRefreshAmount: 10,
+    reservoirRefreshInterval: 1000,
+  },
+  semrush: {
+    maxConcurrent: 5,
+    minTime: 200, // 5 req/sec
+    reservoir: 5,
+    reservoirRefreshAmount: 5,
+    reservoirRefreshInterval: 1000,
   },
 };
 
 export class RateLimiter {
-  private limiters: Map<string, Bottleneck> = new Map();
   private globalLimiter: Bottleneck;
+  private limiters: Map<string, Bottleneck> = new Map();
 
   constructor(globalConfig: RateLimiterConfig = DEFAULT_CONFIG) {
     this.globalLimiter = new Bottleneck(globalConfig);
+  }
+
+  /**
+   * Execute a function with rate limiting
+   */
+  async execute<T>(
+    fn: () => Promise<T>,
+    provider?: string
+  ): Promise<T> {
+    const limiter = this.getLimiter(provider);
+    return limiter.schedule(fn);
   }
 
   /**
@@ -82,17 +93,6 @@ export class RateLimiter {
   }
 
   /**
-   * Execute a function with rate limiting
-   */
-  async execute<T>(
-    fn: () => Promise<T>,
-    provider?: string
-  ): Promise<T> {
-    const limiter = this.getLimiter(provider);
-    return limiter.schedule(fn);
-  }
-
-  /**
    * Get current limiter stats
    */
   getStats(provider?: string): Bottleneck.Counts {
@@ -102,11 +102,12 @@ export class RateLimiter {
 }
 
 // Singleton instance
-let instance: RateLimiter | null = null;
+let instance: null | RateLimiter = null;
 
 export function getRateLimiter(): RateLimiter {
   if (!instance) {
     instance = new RateLimiter();
   }
+
   return instance;
 }
