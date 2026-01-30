@@ -49,6 +49,12 @@
   ],
   "license": "MIT",
   "main": "dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "type": "module",
   "oclif": {
     "bin": "moa",
