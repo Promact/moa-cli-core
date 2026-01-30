@@ -8,15 +8,21 @@
   },
   "bugs": "https://github.com/Promact/moa-cli-core/issues",
   "dependencies": {
+    "@inquirer/prompts": "^8.2.0",
     "@oclif/core": "^4",
     "@oclif/plugin-help": "^6",
-    "@oclif/plugin-plugins": "^5"
+    "@oclif/plugin-plugins": "^5",
+    "axios": "^1.13.4",
+    "bottleneck": "^2.19.5",
+    "cli-table3": "^0.6.5",
+    "keytar": "^7.9.0"
   },
   "devDependencies": {
     "@eslint/compat": "^1",
     "@oclif/prettier-config": "^0.2.1",
     "@oclif/test": "^4",
     "@types/chai": "^4",
+    "@types/keytar": "^4.4.2",
     "@types/mocha": "^10",
     "@types/node": "^18",
     "chai": "^4",
@@ -54,6 +60,9 @@
     ],
     "topicSeparator": " ",
     "topics": {
+      "config": {
+        "description": "Manage CLI configuration and profiles"
+      },
       "hello": {
         "description": "Say hello to the world and others"
       }
